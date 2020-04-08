@@ -1,0 +1,17 @@
+{
+  "private": true,
+  "devDependencies": {
+    "@babel/core": "^7.9.0",
+    "@babel/preset-env": "^7.9.5",
+    "babel-loader": "^8.1.0",
+    "webpack": "^4.42.1",
+    "webpack-cli": "^3.3.11",
+    "webpack-dev-server": "^3.10.3"
+  },
+  "scripts": {
+    "start": "webpack-dev-server --open --hot --mode development --port 5001"
+  },
+  "dependencies": {
+    "mr.ringer": "^0.2.0"
+  }
+}

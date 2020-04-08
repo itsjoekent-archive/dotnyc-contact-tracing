@@ -1,0 +1,42 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <style>
+      body {
+        margin: 0;
+        padding: 0;
+      }
+
+      #reset {
+        font-family: monospace;
+        font-size: 18px;
+        font-weight: bold;
+        text-transform: uppercase;
+        text-align: center;
+        width: fit-content;
+        padding: 4px 8px;
+        background: #40464b;
+        color: #FFFFFF;
+        border-radius: 0;
+        border: none;
+        cursor: pointer;
+
+        position: absolute;
+        bottom: 8px;
+        right: 8px;
+      }
+
+      #reset:hover {
+        color: #40464b;
+        border: 2px solid #40464b;
+        background: #FFFFFF;
+      }
+    </style>
+  </head>
+  <body>
+    <button id="reset">reset</button>
+    <canvas id="viz"></canvas>
+    <script src="/main.js"></script>
+  </body>
+</html>
