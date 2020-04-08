@@ -12,11 +12,10 @@ const RESPAWN_RATE = 200;
 const RESPAWN_INFECTION_RATE = 0.1;
 const MAX_POPULATION = 200;
 
-const TESTING_FREQUENCY = 3500;
-const TESTING_CHANCE = 0.45;
+const TESTING_FREQUENCY = 100;
 const QUARANTINE_LIFE = 3000;
 const NOTIFICATION_DELAY = 1000;
-const INFECTION_DELAY = 500;
+const INFECTION_DELAY = 250;
 
 const TEST_HIGHLIGHT_DIMENSIONS = [0.02, 0.005];
 
@@ -66,7 +65,6 @@ function simulation() {
       isIndexCase: false,
       quarantinedAt: null,
       quarantinedBy: null,
-      lastTested: Date.now(),
       contacts: [],
       hasNotifiedContacts: false,
       travelTarget: Math.random() > 0.25 ? Vector2(Math.random(), Math.random()) : null,
@@ -99,6 +97,7 @@ function simulation() {
 
   let lastTick = Date.now();
   let lastRespawn = Date.now();
+  let lastTest = Date.now();
   let stop = false;
 
   function loop() {
@@ -130,6 +129,17 @@ function simulation() {
 
       cells.push(newCell);
       lastRespawn = Date.now();
+    }
+
+    if (Date.now() - lastTest > TESTING_FREQUENCY) {
+      const cellIndex = getRandomInt(0, cells.length);
+
+      if (cells[cellIndex].infectedAt && !cells[cellIndex].quarantinedAt) {
+        cells[cellIndex].quarantinedAt = Date.now();
+        cells[cellIndex].isIndexCase = true;
+      }
+
+      lastTest = Date.now();
     }
 
     cells.forEach((_original, index) => {
@@ -180,15 +190,6 @@ function simulation() {
             }
           }
         });
-      }
-
-      if (Date.now() - cell.lastTested > TESTING_FREQUENCY && Math.random() > TESTING_CHANCE) {
-        cell.lastTested = Date.now();
-
-        if (isInfected && !isQuarantined && cell.contacts.length) {
-          cell.quarantinedAt = Date.now();
-          cell.isIndexCase = true;
-        }
       }
 
       if (isQuarantined && !cell.hasNotifiedContacts && Date.now() - cell.quarantinedAt > NOTIFICATION_DELAY) {
