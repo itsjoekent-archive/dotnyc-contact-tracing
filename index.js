@@ -209,8 +209,8 @@ function simulation(onPandemicEnd) {
 
       const [cellDrawX, cellDrawY] = view(cell.position);
 
-      const cellDrawRadius = canvas.width * CELL_RADIUS;
-      const testDrawRadius = canvas.width * TEST_OUTLINE_RADIUS;
+      const cellDrawRadius = Math.max(canvas.width * CELL_RADIUS, 5);
+      const testDrawRadius = Math.max(canvas.width * TEST_OUTLINE_RADIUS, 10);
 
       ctx.fillStyle = COLORS.BLUE;
       ctx.globalAlpha = 1;

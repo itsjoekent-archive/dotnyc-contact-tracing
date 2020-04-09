@@ -40,17 +40,18 @@
         padding: 12px;
         border: 2px solid #40464b;
 
-        opacity: 0.5;
+        opacity: 1;
+        background-color: #FFF;
         transition: opacity 0.5s;
 
         position: absolute;
-        bottom: 8px;
+        top: 8px;
         left: 8px;
       }
 
       .key:hover {
-        opacity: 1;
-        background-color: #FFF;
+        opacity: 0.5;
+        background-color: transparent;
       }
 
       .key__row {
@@ -123,8 +124,8 @@
     <button id="reset" style="opacity: 0.5;">reset simulation</button>
     <canvas id="viz"></canvas>
     <!-- Use this for local dev -->
-    <!-- <script src="/main.js"></script> -->
+    <script src="/main.js"></script>
 
-    <script src="https://itsjoekent.s3.amazonaws.com/blog/contact-tracing/main.js"></script>
+    <!-- <script src="https://itsjoekent.s3.amazonaws.com/blog/contact-tracing/main.v2.js"></script> -->
   </body>
 </html>
