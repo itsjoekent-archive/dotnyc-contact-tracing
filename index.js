@@ -3,10 +3,11 @@ import { Vector2 } from 'mr.ringer';
 const CELL_RADIUS = 0.005;
 const GOAL_RADIUS = 0.005;
 const INFECTION_RADIUS = 0.02;
+const TEST_OUTLINE_RADIUS = 0.015;
 const CELL_SPEED = 0.0001;
+const TRAVEL_PAUSE = 2000;
 
 const INITIAL_CELLS = 50;
-const INITIAL_INFECTIONS = 2;
 
 const RESPAWN_RATE = 200;
 const RESPAWN_INFECTION_RATE = 0.1;
@@ -14,7 +15,7 @@ const MAX_POPULATION = 200;
 
 const TESTING_FREQUENCY = 100;
 const QUARANTINE_LIFE = 3000;
-const NOTIFICATION_DELAY = 1000;
+const NOTIFICATION_DELAY = 500;
 const INFECTION_DELAY = 250;
 
 const TEST_HIGHLIGHT_DIMENSIONS = [0.02, 0.005];
@@ -40,15 +41,17 @@ function circleIntersection(positionA, radiusA, positionB, radiusB) {
   return distance < radiusA + radiusB;
 }
 
-function simulation() {
+function simulation(onPandemicEnd) {
   const canvas = document.getElementById('viz');
   canvas.width = window.innerWidth;
   canvas.height = window.innerHeight;
 
-  window.addEventListener('resize', () => {
+  function onResize() {
     canvas.width = window.innerWidth;
     canvas.height = window.innerHeight;
-  });
+  }
+
+  window.addEventListener('resize', onResize);
 
   function view(vector) {
     return [
@@ -59,12 +62,11 @@ function simulation() {
 
   function makeCell() {
     return ({
-      id: Math.round(Math.random() * 1000000),
+      id: `${Math.round(Math.random() * 1000000)}`,
       position: Vector2(Math.random(), Math.random()),
       infectedAt: null,
-      isIndexCase: false,
+      infectedBy: null,
       quarantinedAt: null,
-      quarantinedBy: null,
       contacts: [],
       hasNotifiedContacts: false,
       travelTarget: Math.random() > 0.25 ? Vector2(Math.random(), Math.random()) : null,
@@ -75,22 +77,24 @@ function simulation() {
 
   const ctx = canvas.getContext('2d');
 
-  const cells = new Array(INITIAL_CELLS).fill({}).map((cell) => makeCell());
+  const cells = new Array(INITIAL_CELLS)
+    .fill({})
+    .map((cell) => makeCell())
+    .reduce((acc, cell) => ({ ...acc, [cell.id]: cell }), {});
 
-  for (let i = 0; i < INITIAL_INFECTIONS; i++) {
-    cells[getRandomInt(0, cells.length)].infectedAt = Date.now();
-  }
+  const initialInfectionId = Object.keys(cells)[getRandomInt(0, INITIAL_CELLS)];
+  cells[initialInfectionId].infectedAt = Date.now();
+
+  let indexCaseId = null;
 
   function quarantine(id, contacts) {
     contacts.forEach((contactId) => {
-      const contactIndex = cells.findIndex((cell) => cell.id === contactId);
-      if (contactIndex === -1) {
+      if (!contactId || !cells[contactId]) {
         return;
       }
 
-      if (!cells[contactIndex].quarantinedAt) {
-        cells[contactIndex].quarantinedAt = Date.now();
-        cells[contactIndex].quarantinedBy = id;
+      if (!cells[contactId].quarantinedAt) {
+        cells[contactId].quarantinedAt = Date.now();
       }
     });
   }
@@ -99,6 +103,7 @@ function simulation() {
   let lastRespawn = Date.now();
   let lastTest = Date.now();
   let stop = false;
+  let hasPandemicEnded = false;
 
   function loop() {
     if (stop) {
@@ -123,30 +128,34 @@ function simulation() {
 
       newCell.travelTarget = Vector2(Math.random(), Math.random());
 
-      if (Math.random() < RESPAWN_INFECTION_RATE) {
-        newCell.infectedAt = Date.now();
-      }
+      cells[newCell.id] = newCell;
 
-      cells.push(newCell);
       lastRespawn = Date.now();
     }
 
     if (Date.now() - lastTest > TESTING_FREQUENCY) {
-      const cellIndex = getRandomInt(0, cells.length);
+      const cellTestId = Object.keys(cells)[getRandomInt(0, Object.keys(cells).length)];
 
-      if (cells[cellIndex].infectedAt && !cells[cellIndex].quarantinedAt) {
-        cells[cellIndex].quarantinedAt = Date.now();
-        cells[cellIndex].isIndexCase = true;
+      if (cells[cellTestId].infectedAt && !cells[cellTestId].quarantinedAt && cells[cellTestId].contacts.length) {
+        cells[cellTestId].quarantinedAt = Date.now();
+
+        if (!indexCaseId) {
+          indexCaseId = cellTestId;
+        }
       }
 
       lastTest = Date.now();
     }
 
-    cells.forEach((_original, index) => {
-      const cell = { ..._original };
+    Object.keys(cells).forEach((id) => {
+      const cell = { ...cells[id] };
 
       const isInfected = !!cell.infectedAt;
       const isQuarantined = !!cell.quarantinedAt;
+
+      if (isInfected && !isQuarantined && hasPandemicEnded) {
+        hasPandemicEnded = false;
+      }
 
       if (!isQuarantined) {
         if (cell.travelTarget) {
@@ -170,39 +179,38 @@ function simulation() {
           } else if (cell.position.y < -2.1) {
             cell.position.y = 1;
           }
-        } else if (cell.lastTraveled > 1000 && cell.travelFrequency > Math.random()) {
+        } else if (Date.now() - cell.lastTraveled > TRAVEL_PAUSE && cell.travelFrequency > Math.random()) {
           cell.travelTarget = new Vector2(Math.random(), Math.random());
         }
       }
 
       if (isInfected && !isQuarantined && Date.now() - cell.infectedAt > INFECTION_DELAY) {
-        cells.forEach((compare, compareIndex) => {
+        Object.keys(cells).forEach((compareId) => {
+          const compare = cells[compareId];
+
           if (compare.infectedAt || compare.quarantinedAt) {
             return;
           }
 
           if (circleIntersection(cell.position, INFECTION_RADIUS, compare.position, INFECTION_RADIUS)) {
             cell.contacts.push(compare.id);
-            cells[compareIndex].infectedAt = Date.now();
-
-            if (!cells[compareIndex].contacts.includes(cell.id)) {
-              cells[compareIndex].contacts.push(cell.id);
-            }
+            cells[compareId].infectedAt = Date.now();
+            cells[compareId].infectedBy = cell.id;
           }
         });
       }
 
       if (isQuarantined && !cell.hasNotifiedContacts && Date.now() - cell.quarantinedAt > NOTIFICATION_DELAY) {
         cell.hasNotifiedContacts = true;
-        quarantine(cell.id, cell.contacts);
+        quarantine(cell.id, [...cell.contacts, cell.infectedBy]);
       }
 
-      cells[index] = cell;
+      cells[id] = cell;
 
       const [cellDrawX, cellDrawY] = view(cell.position);
 
       const cellDrawRadius = canvas.width * CELL_RADIUS;
-      const infectionDrawRadius = canvas.width * INFECTION_RADIUS;
+      const testDrawRadius = canvas.width * TEST_OUTLINE_RADIUS;
 
       ctx.fillStyle = COLORS.BLUE;
       ctx.globalAlpha = 1;
@@ -213,56 +221,27 @@ function simulation() {
       } else if (isQuarantined) {
         ctx.fillStyle = COLORS.GRAY;
         ctx.strokeStyle = COLORS.GRAY;
-
-        const timeElapsed = Date.now() - cell.quarantinedAt;
-        ctx.globalAlpha = 1 - (timeElapsed / QUARANTINE_LIFE);
-
-        if (timeElapsed > QUARANTINE_LIFE) {
-          cells.splice(index, 1);
-          return;
-        }
+        ctx.globalAlpha = 0.5;
       }
 
-      if (isQuarantined && cell.isIndexCase && !cell.quarantinedBy) {
-        const topLeftCorner = view(Vector2(
-          cell.position.x - (TEST_HIGHLIGHT_DIMENSIONS[1] / 2),
-          cell.position.y - (TEST_HIGHLIGHT_DIMENSIONS[0] / 2),
-        ));
-
-        const bottomRightCorner = view(Vector2(
-          TEST_HIGHLIGHT_DIMENSIONS[1],
-          TEST_HIGHLIGHT_DIMENSIONS[0],
-        ));
-
-        ctx.fillRect(...topLeftCorner, ...bottomRightCorner);
-
-        const middleLeftCorner = view(Vector2(
-          cell.position.x - (TEST_HIGHLIGHT_DIMENSIONS[0] / 2),
-          cell.position.y - (TEST_HIGHLIGHT_DIMENSIONS[1] / 2),
-        ));
-
-        const middleRightCorner = view(Vector2(
-          TEST_HIGHLIGHT_DIMENSIONS[0],
-          TEST_HIGHLIGHT_DIMENSIONS[1],
-        ));
-
-        ctx.fillRect(...middleLeftCorner, ...middleRightCorner);
-      } else {
+      if (isQuarantined && indexCaseId === cell.id) {
+        ctx.setLineDash([10, 10]);
         ctx.beginPath();
-        ctx.arc(cellDrawX, cellDrawY, cellDrawRadius, 0, Math.PI * 2, true);
-        ctx.fill();
+        ctx.arc(cellDrawX, cellDrawY, testDrawRadius, 0, Math.PI * 2, true);
+
+        ctx.lineWidth = 2;
+        ctx.stroke();
+        ctx.setLineDash([]);
       }
+
+      ctx.beginPath();
+      ctx.arc(cellDrawX, cellDrawY, cellDrawRadius, 0, Math.PI * 2, true);
+      ctx.fill();
 
       if (isInfected) {
-        // ctx.setLineDash([10, 10]);
-        // ctx.beginPath();
-        // ctx.arc(cellDrawX, cellDrawY, infectionDrawRadius, 0, Math.PI * 2, true);
-        //
-        // ctx.lineWidth = 1;
-        // ctx.stroke();
-
         cell.contacts.forEach((contactId) => {
-          const contact = cells.find((cell) => cell.id === contactId);
+          const contact = cells[contactId];
+
           if (!contact) {
             return;
           }
@@ -272,9 +251,26 @@ function simulation() {
           ctx.moveTo(cellDrawX, cellDrawY);
           ctx.lineTo(...view(contact.position));
           ctx.stroke();
+
+          ctx.save();
+          const angle = -Math.atan2(contact.position.x - cell.position.x, contact.position.y - cell.position.y);
+          ctx.translate(...view(contact.position));
+          ctx.rotate(angle);
+          ctx.beginPath();
+          ctx.moveTo(0, 0);
+          ctx.lineTo(-5, -12);
+          ctx.lineTo(5, -12);
+          ctx.closePath();
+          ctx.fill();
+          ctx.restore();
         });
       }
     });
+
+    if (!hasPandemicEnded && !Object.values(cells).find((cell) => cell.infectedAt && !cell.quarantinedAt)) {
+      hasPandemicEnded = true;
+      onPandemicEnd();
+    }
 
     ctx.restore();
     requestAnimationFrame(loop);
@@ -282,16 +278,24 @@ function simulation() {
 
   requestAnimationFrame(loop);
 
-  return () => stop = true;
+  return () => {
+    stop = true;
+    window.removeEventListener('resize', onResize);
+  };
 }
 
 (function() {
   const resetButton = document.getElementById('reset');
 
-  let stop = simulation();
+  function onPandemicEnd() {
+    resetButton.style.opacity = 1;
+  }
+
+  let stop = simulation(onPandemicEnd);
 
   resetButton.addEventListener('click', () => {
     stop();
-    stop = simulation();
+    stop = simulation(onPandemicEnd);
+    resetButton.style.opacity = 0.5;
   });
 })();
